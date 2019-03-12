@@ -1,0 +1,199 @@
+---
+title: "HW2_CS498AML"
+author: "Moyu Liu"
+date: "9/13/2018"
+output: pdf_document
+---
+
+```{r}
+calculate_acc <- function(plot_feature, plot_label, a, b) {
+  correct = 0
+  for (i in 1:nrow(plot_feature)) {
+    r = sign((t(a) %*% as.numeric(plot_feature[i,])) + b)
+          
+    if (r == plot_label[i]) {
+      correct = correct + 1
+    }
+  }
+  return(correct / nrow(plot_feature))
+}
+```
+
+# Load data
+```{r}
+library(caret)
+train_data = read.csv("dataset/train.data", header=FALSE)
+test_data  = read.csv("dataset/test.data", header=FALSE)
+```
+
+```{r}
+
+training_label = as.numeric(train_data[,15])
+training_label[training_label == 1] = -1
+training_label[training_label == 2] = 1
+col_Names = c("V1","V3","V5","V11","V12","V13")
+training_feature = train_data[col_Names]
+
+testing_feature = test_data[col_Names]
+
+head(training_feature)
+head(testing_feature)
+```
+
+```{r}
+#90% training and 10% validation data
+
+#Initialize data sections
+tr_idx = createDataPartition(y = training_label, p = 0.9, list = FALSE)
+tr_feature = training_feature[tr_idx,]
+tr_label = training_label[tr_idx]
+
+val_feature = training_feature[-tr_idx,]
+val_label = training_label[-tr_idx]
+
+te_feature = testing_feature
+
+for(i in 1:ncol(tr_feature)){
+  m = mean(tr_feature[,i])
+  sd = sd(tr_feature[,i])
+  tr_feature[,i] = (tr_feature[,i] - m) / sd
+  val_feature[,i] = (val_feature[,i] - m) / sd
+  te_feature[,i] = (te_feature[,i] - m) / sd
+}
+
+#initialize variables
+four_lambda <- c(0.001, 0.01, 0.1, 1)
+epochs <- 50
+steps <- 300 
+batch_size =160
+m = 1
+n = 900
+
+def_a = runif(6)
+def_b = 0
+batch_acc = matrix(0, epochs*(steps/30), 5)
+a_acc = matrix(0, epochs*(steps/30), 5)
+colnames(batch_acc) = c("Step","0.001","0.01","0.1","1")
+colnames(a_acc) = c("Step","0.001","0.01","0.1","1")
+
+```
+
+```{r}
+best_acc = 0
+best_lambda = 0.1
+best_b = 0
+for (lambda_entry in 1:4) {
+  
+  lambda = four_lambda[lambda_entry]
+  
+  a = def_a
+  b = def_b
+  
+  for (epoch_entry in 1:epochs) {
+    #step length
+    step_len = m/(0.01*epoch_entry+n)
+    
+    #50 examples from training set to plot
+    plot_idx = sample(seq(1,nrow(val_feature)), size = 50)
+    plot_feature = val_feature[plot_idx,]
+    plot_label = val_label[plot_idx]
+    
+    for (step in 1:steps) {
+      batch_idx = sample(seq(1,nrow(tr_feature)), size = 160)
+      batch_feature = data.matrix(tr_feature[batch_idx,])
+      batch_label = tr_label[batch_idx]
+      
+      sum1 = rep(0,6)
+      sum2 = 0
+      for(i in 1:nrow(batch_feature)) {
+        r = (t(a) %*% batch_feature[i,] + b) * batch_label[i]
+        if (r >= 1) {
+          # a = a - (a*step_len*lambda)
+          sum1 = sum1 + (a*step_len*lambda)
+        } 
+        else {
+          #a = a - (step_len * ((lambda * a) - batch_feature[i,]*batch_label[i]))
+          #b = b + (step_len * batch_label[i])
+          sum1 = sum1 + (step_len * ((lambda * a) - batch_feature[i,]*batch_label[i]))
+          sum2 = sum2 + (step_len * batch_label[i])
+        }
+      }
+      a = a - (sum1)/160
+      b = b - (-sum2)/160
+      
+      if (step %% 30 == 0) {
+        total_step = ((epoch_entry - 1) * steps) + step
+        batch_acc[total_step/30, "Step"] = total_step
+        batch_acc[total_step/30, lambda_entry+1] = calculate_acc(plot_feature, plot_label, a, b)
+        a_acc[total_step/30, "Step"] = total_step
+        a_acc[total_step/30, lambda_entry+1] = t(a) %*% a
+      }
+    }
+  }
+  
+  accuracy = calculate_acc(val_feature, val_label, a, b)
+  
+  print(paste(lambda, ": ", accuracy))
+  
+  if(accuracy > best_acc) {
+    best_acc = accuracy
+    best_lambda = four_lambda[lambda_entry]
+    best_a = a
+    best_b = b
+  }
+}
+print(paste("Best accuracy: ", best_acc))
+print(paste("Best lambda: ", best_lambda))
+print(paste("Best a: ", best_a))
+print(paste("Best b: ", best_b))
+print(calculate_acc(tr_feature, tr_label, best_a, best_b))
+```
+
+
+```{r}
+#te_label = sign(t(best_a) %*% t(data.matrix(te_feature))+best_b)
+pre = data.matrix(te_feature)
+for(i in 1:ncol(pre)){
+  pre[,i] = (pre[,i] - mean(pre[,i])) / sd(pre[,i])
+}
+te_label = sign(t(best_a) %*% t(pre) + best_b)
+te_label[te_label == 1] = ">50K"
+te_label[te_label == -1] = "<=50K"
+
+final_output = matrix(0:4883, 4884, 1)
+
+for(i in 1:4884) {
+  final_output[i] = paste0("'", final_output[i], "'")
+}
+
+final_output = cbind(final_output, t(te_label))
+colnames(final_output) = c("Example", "Label")
+
+write.csv(final_output, file = "labels_test.data", row.names = FALSE)
+
+```
+
+
+```{r}
+plot(seq(1,15000,30),batch_acc[,2],type = "o", cex = 0.1, col = "red", ylim = c(0,1), xlab = "Steps", ylab = "Accuracy", main = "Accuracy vs. Steps")
+lines(seq(1,15000,30), batch_acc[,3],type = "o", cex = 0.1, col = "green")
+lines(seq(1,15000,30), batch_acc[,4],type = "o", cex = 0.1, col = "blue")
+lines(seq(1,15000,30), batch_acc[,5],type = "o", cex = 0.1, col = "black")
+legend("bottomright", legend=c('lamda = 0.001','lamda = 0.01','lamda = 0.1','lamda = 1'),
+       lty=c(1,1,1,1),
+       lwd=c(2.5,2.5,2.5,2.5),
+       col=c("red","green","blue","black")
+)
+```
+
+```{r}
+plot(seq(1,15000,30),a_acc[,2],type = "o", cex = 0.1, col = "red", ylim = c(0,4), xlab = "Steps", ylab = "Magnitude", main = "Magnitude vs. Steps")
+lines(seq(1,15000,30), a_acc[,3],type = "o", cex = 0.1, col = "green")
+lines(seq(1,15000,30), a_acc[,4],type = "o", cex = 0.1, col = "blue")
+lines(seq(1,15000,30), a_acc[,5],type = "o", cex = 0.1, col = "black")
+legend("topleft", legend=c('lamda = 0.001','lamda = 0.01','lamda = 0.1','lamda = 1'),
+       lty=c(1,1,1,1),
+       lwd=c(2.5,2.5,2.5,2.5),
+       col=c("red","green","blue","black")
+)
+```

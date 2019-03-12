@@ -1,0 +1,227 @@
+---
+title: "HW3"
+author: "Moyu Liu"
+date: "9/23/2018"
+output: html_document
+---
+
+```{r}
+iris = read.csv("dataset/iris.csv")
+data1 = read.csv("dataset/dataI.csv")
+data2 = read.csv("dataset/dataII.csv")
+data3 = read.csv("dataset/dataIII.csv")
+data4 = read.csv("dataset/dataIV.csv")
+data5 = read.csv("dataset/dataV.csv")
+
+mse = data.frame(matrix(nrow = 5, ncol = 10))
+colnames(mse)[colnames(mse)=="X1"] <- '0N'
+colnames(mse)[colnames(mse)=="X2"] <- '1N'
+colnames(mse)[colnames(mse)=="X3"] <- '2N'
+colnames(mse)[colnames(mse)=="X4"] <- '3N'
+colnames(mse)[colnames(mse)=="X5"] <- '4N'
+colnames(mse)[colnames(mse)=="X6"] <- '0c'
+colnames(mse)[colnames(mse)=="X7"] <- '1c'
+colnames(mse)[colnames(mse)=="X8"] <- '2c'
+colnames(mse)[colnames(mse)=="X9"] <- '3c'
+colnames(mse)[colnames(mse)=="X10"] <- '4c'
+
+cov_iris = cov(iris)
+mean_iris = c(0,0,0,0)
+for(i in 1:4) {
+  mean_iris[i] = mean(iris[,i])
+}
+
+eig_vec = eigen(cov_iris)$vectors
+```
+
+```{r}
+pca_func = function(data, table_num) {
+  
+  row_num = nrow(data)
+  col_num = ncol(data)
+  
+  ret_data = matrix(rep(0, row_num * col_num), nrow = row_num, ncol = col_num)
+  if(table_num == 0) {
+    for(i in 1:ncol(data)) {
+      ret_data[,i] = mean_iris[i]
+    }
+  }
+  else {
+    for(i in 1:row_num) {
+      for(j in 1:table_num) {
+        ret_data[i,] = ret_data[i,] + as.numeric(eig_vec[,j] %*% (data[i,] - mean_iris)) * eig_vec[,j]
+      }
+      ret_data[i,] = ret_data[i,] + mean_iris
+    }
+  }
+  
+  square_diff = (ret_data - iris)^2
+  err = 0
+  for(i in 1:row_num) {
+    for(j in 1:col_num) {
+      err = err + (ret_data[i,j] - iris[i,j])^2
+    }
+  }
+  
+  err = err / nrow(data)
+  return(err)
+}
+
+pca_func2 = function(data, table_num) {
+  
+  row_num = nrow(data)
+  col_num = ncol(data)
+  
+  m = c(0,0,0,0)
+  for(i in 1:4) {
+    m[i] = mean(data[,i])
+  }
+
+  eig_vec = eigen(cov(data))$vectors
+  
+  ret_data = matrix(rep(0, row_num * col_num), nrow = row_num, ncol = col_num)
+  if(table_num == 0) {
+    for(i in 1:ncol(data)) {
+      ret_data[,i] = m[i]
+    }
+  }
+  else {
+    for(i in 1:row_num) {
+      for(j in 1:table_num) {
+        ret_data[i,] = ret_data[i,] + as.numeric(eig_vec[,j] %*% (data[i,] - m)) * eig_vec[,j]
+      }
+      ret_data[i,] = ret_data[i,] + m
+    }
+  }
+  
+  square_diff = (ret_data - iris)^2
+  err = 0
+  for(i in 1:row_num) {
+    for(j in 1:col_num) {
+      err = err + (ret_data[i,j] - iris[i,j])^2
+    }
+  }
+  
+  err = err / nrow(data)
+  
+  return(err)
+}
+
+reconstruction = function(data, table_num) {
+  
+  row_num = nrow(data)
+  col_num = ncol(data)
+  
+  m = c(0,0,0,0)
+  for(i in 1:4) {
+    m[i] = mean(data[,i])
+  }
+
+  eig_vec = eigen(cov(data))$vectors
+  
+  ret_data = matrix(rep(0, row_num * col_num), nrow = row_num, ncol = col_num)
+  if(table_num == 0) {
+    for(i in 1:ncol(data)) {
+      ret_data[,i] = m[i]
+    }
+  }
+  else {
+    for(i in 1:row_num) {
+      for(j in 1:table_num) {
+        ret_data[i,] = ret_data[i,] + as.numeric(eig_vec[,j] %*% (data[i,] - m)) * eig_vec[,j]
+      }
+      ret_data[i,] = ret_data[i,] + m
+    }
+  }
+  return (ret_data)
+}
+  
+calc_mse = function(data, table_num) {
+  
+  row_num = nrow(data)
+  col_num = ncol(data)
+  
+  square_diff = (data - iris)^2
+  err = 0
+  for(i in 1:row_num) {
+    for(j in 1:col_num) {
+      err = err + (data[i,j] - iris[i,j])^2
+    }
+  }
+  
+  err = err / nrow(iris)
+  
+  return(err)
+}
+```
+
+```{r}
+mse[1,1] = pca_func(data1, 0)
+mse[2,1] = pca_func(data2, 0)
+mse[3,1] = pca_func(data3, 0)
+mse[4,1] = pca_func(data4, 0)
+mse[5,1] = pca_func(data5, 0)
+
+mse[1,2] = pca_func(as.matrix(data1), 1)
+mse[2,2] = pca_func(as.matrix(data2), 1)
+mse[3,2] = pca_func(as.matrix(data3), 1)
+mse[4,2] = pca_func(as.matrix(data4), 1)
+mse[5,2] = pca_func(as.matrix(data5), 1)
+
+mse[1,3] = pca_func(as.matrix(data1), 2)
+mse[2,3] = pca_func(as.matrix(data2), 2)
+mse[3,3] = pca_func(as.matrix(data3), 2)
+mse[4,3] = pca_func(as.matrix(data4), 2)
+mse[5,3] = pca_func(as.matrix(data5), 2)
+
+mse[1,4] = pca_func(as.matrix(data1), 3)
+mse[2,4] = pca_func(as.matrix(data2), 3)
+mse[3,4] = pca_func(as.matrix(data3), 3)
+mse[4,4] = pca_func(as.matrix(data4), 2)
+mse[5,4] = pca_func(as.matrix(data5), 3)
+
+mse[1,5] = pca_func(as.matrix(data1), 4)
+mse[2,5] = pca_func(as.matrix(data2), 4)
+mse[3,5] = pca_func(as.matrix(data3), 4)
+mse[4,5] = pca_func(as.matrix(data4), 4)
+mse[5,5] = pca_func(as.matrix(data5), 4)
+
+mse[1,6] = pca_func2(data1, 0)
+mse[2,6] = pca_func2(data2, 0)
+mse[3,6] = pca_func2(data3, 0)
+mse[4,6] = pca_func2(data4, 0)
+mse[5,6] = pca_func2(data5, 0)
+
+mse[1,7] = pca_func2(as.matrix(data1), 1)
+mse[2,7] = pca_func2(as.matrix(data2), 1)
+mse[3,7] = pca_func2(as.matrix(data3), 1)
+mse[4,7] = pca_func2(as.matrix(data4), 1)
+mse[5,7] = pca_func2(as.matrix(data5), 1)
+
+mse[1,8] = pca_func2(as.matrix(data1), 2)
+rec = reconstruction(as.matrix(data2), 2)
+mse[2,8] = calc_mse(as.matrix(rec), 2)
+mse[3,8] = pca_func2(as.matrix(data3), 2)
+mse[4,8] = pca_func2(as.matrix(data4), 2)
+mse[5,8] = pca_func2(as.matrix(data5), 2)
+
+mse[1,9] = pca_func2(as.matrix(data1), 3)
+mse[2,9] = pca_func2(as.matrix(data2), 3)
+mse[3,9] = pca_func2(as.matrix(data3), 3)
+mse[4,9] = pca_func2(as.matrix(data4), 3)
+mse[5,9] = pca_func2(as.matrix(data5), 3)
+
+mse[1,10] = pca_func2(as.matrix(data1), 4)
+mse[2,10] = pca_func2(as.matrix(data2), 4)
+mse[3,10] = pca_func2(as.matrix(data3), 4)
+mse[4,10] = pca_func2(as.matrix(data4), 4)
+mse[5,10] = pca_func2(as.matrix(data5), 4)
+
+```
+
+```{r}
+rec = data.frame(rec)
+
+write.csv(rec, "result/moyuliu2-recon.csv", row.names = FALSE)
+write.csv(mse, "result/moyuliu2-numbers.csv", row.names = FALSE)
+```

@@ -1,0 +1,170 @@
+---
+title: "HW1"
+output: pdf_document
+---
+
+```{r}
+#Extract data
+data_table <- read.csv("dataset/pima-indians-diabetes.csv",header = FALSE)
+
+#Change header names
+colnames(data_table)[colnames(data_table)=="V1"] <- 'preg'
+colnames(data_table)[colnames(data_table)=="V2"] <- 'plas'
+colnames(data_table)[colnames(data_table)=="V3"] <- 'pres'
+colnames(data_table)[colnames(data_table)=="V4"] <- 'skin'
+colnames(data_table)[colnames(data_table)=="V5"] <- 'test'
+colnames(data_table)[colnames(data_table)=="V6"] <- 'mass'
+colnames(data_table)[colnames(data_table)=="V7"] <- 'pedi'
+colnames(data_table)[colnames(data_table)=="V8"] <- 'age'
+colnames(data_table)[colnames(data_table)=="V9"] <- "class"
+
+```
+
+Prblem 1(a)
+```{r}
+#Initialize variables
+avg_acc1 = 0
+
+#Generate 10 times cross validation
+for(d in (1:10)) {
+  
+  correct = 0
+  #Split data into train and test data
+  training_index = sample(nrow(data_table), nrow(data_table)*0.8)
+  testing_index = -training_index
+  train_data = data_table[training_index, ]
+  test_data = data_table[testing_index, ]
+  
+  #Calculate class percentage
+  cat1 = 0
+  for(num in train_data$class)
+    if(num == 1)
+      cat1 = cat1 + 1
+  
+  P1 = cat1/(0.8*nrow(data_table))
+  P0 = 1 - P1
+  
+  mean_table <- array(0, c(2,8))
+  std_table <- array(0, c(2,8))
+
+  #Calculate mean and std of each attribute
+  for(i in (1:2))
+    for(j in (1:8)) {
+      mean_table[i,j] = mean(train_data[train_data[['class']] == i-1, j])
+      std_table[i,j] = sd(train_data[train_data[['class']] == i-1, j])
+    }
+  #Check accuracy on test data
+  for(i in (1:nrow(test_data))) {
+    cat0_sum = log(P0)
+    cat1_sum = log(P1)
+    for(j in (1:8)) {
+      cat0_sum = cat0_sum + dnorm(test_data[i,j], mean_table[1,j], std_table[1, j], log=TRUE)
+      cat1_sum = cat1_sum + dnorm(test_data[i,j], mean_table[2,j], std_table[2, j], log=TRUE)
+    }
+    
+    if(cat0_sum >= cat1_sum & test_data[i,'class'] == 0)
+      correct = correct+1
+    if(cat1_sum >= cat0_sum & test_data[i,'class'] == 1)
+      correct = correct+1
+  }
+  avg_acc1 = avg_acc1 + correct/(nrow(test_data)*10)
+}
+
+avg_acc1
+```
+
+Problem 1(b)
+```{r}
+#Initialize variables
+avg_acc2 = 0
+
+#Generate 10 times cross validation
+for(d in (1:10)) {
+  
+  correct = 0
+  #Split data into train and test data
+  training_index = sample(nrow(data_table), nrow(data_table)*0.8)
+  testing_index = -training_index
+  train_data = data_table[training_index, ]
+  test_data = data_table[testing_index, ]
+  
+  #Calculate class percentage
+  cat1 = 0
+  for(num in train_data$class)
+    if(num == 1)
+      cat1 = cat1 + 1
+  
+  P1 = cat1/(0.8*nrow(data_table))
+  P0 = 1 - P1
+  
+  mean_table <- array(0, c(2,8))
+  std_table <- array(0, c(2,8))
+
+  #Calculate mean and std of each attribute
+  for(i in (1:2))
+    for(j in (1:8)) {
+      if(j==3|j==4|j==6|j==8) {
+        attr_vals = train_data[train_data[['class']] == i-1, j]
+        mean_table[i,j] = mean(attr_vals[attr_vals!=0])
+        std_table[i,j] = sd(attr_vals[attr_vals!=0])
+      }
+      else {
+        mean_table[i,j] = mean(train_data[train_data[['class']] == i-1, j])
+        std_table[i,j] = sd(train_data[train_data[['class']] == i-1, j])
+      }
+    }
+  
+  #Check accuracy on test data
+  for(i in (1:nrow(test_data))) {
+    cat0_sum = log(P0)
+    cat1_sum = log(P1)
+
+    for(j in (1:8)) {
+      cat0_sum = cat0_sum + dnorm(test_data[i,j], mean_table[1,j], std_table[1, j], log=TRUE)
+      cat1_sum = cat1_sum + dnorm(test_data[i,j], mean_table[2,j], std_table[2, j], log=TRUE)
+    }
+    
+    if(cat0_sum >= cat1_sum & test_data[i,'class'] == 0)
+      correct = correct+1
+    if(cat1_sum >= cat0_sum & test_data[i,'class'] == 1)
+      correct = correct+1
+  }
+  
+  avg_acc2 = avg_acc2 + correct/(nrow(test_data)*10)
+}
+
+avg_acc2
+```
+
+Problem 1d
+```{r}
+library(klaR)
+library(caret)
+
+feature <- data_table[, -c(9)]
+label <- as.factor(data_table[, 9])
+
+avg_acc3 = 0
+
+for(i in (1:10)) {
+  
+  #Split data into train and test data
+  training_index = sample(nrow(data_table), nrow(data_table)*0.8)
+  testing_index = -training_index
+  train_data = data_table[training_index, ]
+  test_data = data_table[testing_index, ] 
+  
+  use_svm <- svmlight (feature[training_index,], label[training_index], pathsvm = 'svm_light_osx.8.4_i7/')
+  
+  predict_result <- predict(use_svm, feature[testing_index,])
+  predict_label <- predict_result$class
+  
+  correct_match = sum(predict_label==label[testing_index])
+  all_testdata = nrow(test_data)
+  
+  avg_acc3 = avg_acc3 + correct_match/(10*all_testdata)
+}
+
+avg_acc3
+```
+

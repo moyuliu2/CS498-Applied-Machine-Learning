@@ -1,0 +1,282 @@
+---
+title: "HW1_Part2"
+author: "Moyu Liu"
+date: "9/7/2018"
+output: pdf_document
+---
+
+#2a
+
+#Source: 'https://stackoverflow.com/questions/11123152/function-for-resizing-matrices-in-r'
+```{r}
+# Rescale image functions
+rescale <- function(x, newrange=range(x)){
+  xrange <- range(x)
+  mfac <- (newrange[2]-newrange[1])/(xrange[2]-xrange[1])
+  newrange[1]+(x-xrange[1])*mfac
+}
+
+ResizeMat <- function(mat, ndim=dim(mat)){
+  if(!require(fields)) stop("`fields` required.")
+  
+  # input object
+  odim <- dim(mat)
+  obj <- list(x= 1:odim[1], y=1:odim[2], z= mat)
+  
+  # output object
+  ans <- matrix(NA, nrow=ndim[1], ncol=ndim[2])
+  ndim <- dim(ans)
+  
+  # rescaling
+  ncord <- as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
+  loc <- ncord
+  loc[,1] = rescale(ncord[,1], c(1,odim[1]))
+  loc[,2] = rescale(ncord[,2], c(1,odim[2]))
+  
+  # interpolation
+  ans[ncord] <- interp.surface(obj, loc)
+  
+  return(as.numeric(t(ans)))
+}
+
+#Resize the image
+ResizeImage = function(before_resize){
+  
+  numrow = nrow(before_resize)
+  after_resize = rep(0, nrow(before_resize) * 400)
+  after_resize = matrix(after_resize, nrow = numrow, ncol = 400, byrow = TRUE)
+    
+  # Convert row to 28 x 28 matrix
+  for(a in 1:nrow(before_resize)){
+    
+    orig_img = matrix(as.numeric(before_resize[a,1:ncol(before_resize)]), nrow = 28, ncol = 28, byrow = TRUE)
+    
+    left = 0
+    right = 0
+    top = 0
+    bot = 0
+    
+    for(i in 1:28) {
+      flag = 0
+      for(j in 1:28) {
+        if(orig_img[i,j]!=0) {
+          top = i
+          flag = 1
+          break;
+        }
+      }
+      if(flag == 1) {
+        break;
+      }
+    }
+    
+    for(i in 28:1) {
+      flag = 0
+      for(j in 1:28) {
+        if(orig_img[i,j]!=0) {
+          bot = i
+          flag = 1
+          break;
+        }
+      }
+      if(flag == 1) {
+        break;
+      }
+    }
+    
+    for(j in 1:28) {
+      flag = 0
+      for(i in 1:28) {
+        if(orig_img[i,j]!=0) {
+          left = j
+          flag = 1
+          break;
+        }
+      }
+      if(flag == 1) {
+        break;
+      }
+    }
+    
+    for(j in 28:1) {
+      flag = 0
+      for(i in 1:28) {
+        if(orig_img[i,j]!=0) {
+          right = j
+          flag = 1
+          break;
+        }
+      }
+      if(flag == 1) {
+        break;
+      }
+    }
+    
+     # Stretched to 20*20
+    after_resize[a,] = ResizeMat(orig_img[top:bot, left:right], c(20,20))
+  }
+  
+  return(after_resize)
+}
+```
+
+```{r}
+library("quanteda")
+library("e1071")
+
+# Extract data
+train_data = read.csv("dataset/train.csv")
+ut_train = train_data[, 3:786]
+st_train = as.data.frame(ResizeImage(ut_train))
+
+val_data = read.csv("dataset/val.csv")
+ut_val = val_data[, 2:785]
+st_val = as.data.frame(ResizeImage(ut_val))
+
+test_data = read.csv("dataset/test.csv", header = FALSE)
+ut_test = test_data
+colnames(ut_test) = colnames(ut_train)
+st_test = as.data.frame(ResizeImage(test_data))
+colnames(st_test) = colnames(st_train)
+```
+
+#For Gaussian Untouched
+```{r}
+gau_ut = naiveBayes(ut_train, as.factor(train_data[, 2]), laplace = 3)
+predict1 = as.numeric(as.vector(predict(gau_ut, ut_test)))
+csv1 = cbind((0:19999), data.frame(col1 = seq(0,19999), col2 = predict1))
+colnames(csv1) = c('ImageId', 'Label')
+```
+
+#For Gausian Stressed
+```{r}
+gau_st = naiveBayes(st_train, as.factor(train_data[, 2]), laplace = 3)
+predict2 = as.numeric(as.vector(predict(gau_st, st_test)))
+csv2 = cbind((0:19999), data.frame(col1 = seq(0,19999), col2 = predict2))
+colnames(csv2) = colnames(csv1)
+```
+
+#For Bernoulli Untouched
+```{r}
+ber_ut = textmodel_nb(as.dfm(ut_train), train_data[, 2], distribution = c("Bernoulli"))
+predict3 = as.numeric(as.vector(predict(ber_ut, ut_test)))
+csv3 = cbind((0:19999), data.frame(col1 = seq(0,19999), col2 = predict3))
+colnames(csv3) = colnames(csv2)
+```
+
+#For Bernoulli Stressed
+```{r}
+ber_st = textmodel_nb(as.dfm(st_train), train_data[, 2], distribution = c("Bernoulli"))
+predict4 = as.numeric(as.vector(predict(ber_st, st_test)))
+csv4 = cbind((0:19999), data.frame(col1 = seq(0,19999), col2 = predict4))
+colnames(csv4) = colnames(csv2)
+```
+
+```{r}
+#Accuracy for training data
+gau_ut_acc = sum(as.numeric(as.vector(predict(gau_ut, ut_val))) == val_data[,1]) / nrow(val_data)
+gau_st_acc = sum(as.numeric(as.vector(predict(gau_st, st_val))) == val_data[,1]) / nrow(val_data)
+ber_ut_acc = sum(as.numeric(as.vector(predict(ber_ut, ut_val))) == val_data[,1]) / nrow(val_data)
+ber_st_acc = sum(as.numeric(as.vector(predict(ber_st, st_val))) == val_data[,1]) / nrow(val_data)
+
+# Save files
+write.csv(csv1, "result/moyuliu2_01.csv", row.names = FALSE)
+write.csv(csv2, "result/moyuliu2_02.csv", row.names = FALSE)
+write.csv(csv3, "result/moyuliu2_03.csv", row.names = FALSE)
+write.csv(csv4, "result/moyuliu2_04.csv", row.names = FALSE)
+```
+
+```{r}
+# plot mean distributions
+library("BBmisc")
+classmean = function(label, df_train, digit){
+  # digit from 0-9
+  idx = which(label == digit)
+  ret = colMeans(df_train[idx,])
+  # make each pixel between 0 and 1
+  ret = normalize(ret, method = "standardize", range = c(0, 1))
+  return(ret)
+}
+
+
+output_label = cbind(predict1, predict2, predict3, predict4)
+op <- par(mar=c(0.5,0.5,0.5,0.5) ,mfrow = c(4, 10), pty = "s")   
+
+for(i in 1:4){
+  output = output_label[,i]
+  for(j in 1:10){
+    if(i==1 | i==3) {
+      graph = classmean(output, ut_test, j-1)
+      graph = matrix(graph, nrow = 28, ncol = 28, byrow = TRUE)
+      image(t(apply(graph, 2, rev)), col=grey(seq(0,1,length=256)))
+    }
+    else {
+      graph = classmean(output, st_test, j-1)
+      graph = matrix(graph, nrow = 20, ncol = 20, byrow = TRUE)
+      image(t(apply(graph, 2, rev)), col=grey(seq(0,1,length=256)))
+    }
+  }
+}
+```
+
+
+
+#2b
+```{r}
+train_only = train_data[,2:786]
+total_val_data = val_data
+
+train_only[,1]  = as.factor(train_only[,1])
+total_val_data[,1]  = as.factor(total_val_data[,1])
+
+total_rescale_train = as.data.frame(cbind(train_data[,2],st_train))
+total_rescale_train[,1]  = as.factor(total_rescale_train[,1])
+colnames(total_rescale_train) <- colnames(train_only)[1:401]
+
+total_rescale_val = as.data.frame(cbind(val_category,st_val))
+total_rescale_val[,1]  = as.factor(total_rescale_val[,1])
+colnames(total_rescale_val) <- colnames(train_only)[1:401]
+```
+
+```{r}
+generate_forest <- function(train, test, numTrees, depth){
+  trainHex<-as.h2o(train)
+  rfHex <- h2o.randomForest(x=(colnames(train)[-1]), y=colnames(train)[1], 
+                            ntrees = numTrees, max_depth = depth,
+                            training_frame=trainHex)
+  testHex<-as.h2o(test)
+  result = cbind((0:19999), as.data.frame(h2o.predict(rfHex,testHex)[,1]))
+  colnames(result) <- c('ImageId','Label')
+  predictions<-as.data.frame(h2o.predict(rfHex,testHex))
+  print(sum(predictions[,1] == test_data[,1])/nrow(test_data))
+  return(result)
+}
+
+colnames(test_data) <- colnames(train_data[3,786])
+colnames(st_test) <- colnames(train_only)[2:401]
+
+output5 = generate_forest(train_only, ut_test, 10, 4)
+output6 = generate_forest(total_rescale_train, st_test, 10, 4)
+output7 = generate_forest(train_only, ut_test, 10, 16)
+output8 = generate_forest(total_rescale_train, st_test, 10, 16)
+output9 = generate_forest(train_only, ut_test, 30, 4)
+output10 = generate_forest(total_rescale_train, st_test, 30, 4)
+output11 = generate_forest(train_only, ut_test, 30, 16)
+output12 = generate_forest(total_rescale_train, st_test, 30, 16)
+
+write.csv(output5, file = 'result/moyuliu2_05.csv', row.names=FALSE)
+write.csv(output6, file = 'result/moyuliu2_06.csv', row.names=FALSE)
+write.csv(output7, file = 'result/moyuliu2_07.csv', row.names=FALSE)
+write.csv(output8, file = 'result/moyuliu2_08.csv', row.names=FALSE)
+write.csv(output9, file = 'result/moyuliu2_09.csv', row.names=FALSE)
+write.csv(output10, file = 'result/moyuliu2_10.csv', row.names=FALSE)
+write.csv(output11, file = 'result/moyuliu2_11.csv', row.names=FALSE)
+write.csv(output12, file = 'result/moyuliu2_12.csv', row.names=FALSE)
+
+```
+
+```{r}
+t1 = cbind((0:19999), as.data.frame(h2o.predict(rfHex,testHex)[,1]))
+colnames(result) <- c('ImageId','Label')
+write.csv(result, file = file_name)
+```
